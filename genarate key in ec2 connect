@@ -1,0 +1,225 @@
+Access bastion via EC2 Connect → generate key → copy key to your local machine → use it to SSH from local terminal.
+
+✅ Full Step-by-Step: Use SSH from CLI for Bastion EC2
+🟢 Step 1: Connect to Bastion EC2 Using EC2 Instance Connect (Web Console)
+Go to AWS Console → EC2 → Instances.
+
+Select the bastion public instance.
+
+Click Connect → EC2 Instance Connect → Connect.
+
+You're now inside the instance via browser-based terminal.
+
+
+
+🟢 Step 2: Generate an SSH Key Pair Inside Bastion
+In the EC2 shell (via browser):
+ssh-keygen -t rsa -b 2048 -f ~/.ssh/mykey
+Press Enter to accept default location /home/ec2-user/.ssh/mykey.
+
+Skip passphrase (just press Enter).
+
+This generates:
+
+Private key: ~/.ssh/mykey
+
+Public key: ~/.ssh/mykey.pub
+
+
+
+🟢 Step 3: Add Public Key to authorized_keys
+cat ~/.ssh/mykey.pub >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+This lets anyone with mykey private key SSH into the instance.
+
+
+
+🟢 Step 4: Copy the Private Key to Your Local Machine
+Now, get the content of the private key so you can use it from your local terminal:
+cat ~/.ssh/mykey
+
+Copy the entire output (starts with -----BEGIN RSA PRIVATE KEY----- and ends with -----END RSA PRIVATE KEY-----).
+
+
+.
+
+🟢 Step 5: On Your Local System, Create a Private Key File
+On your local PC, open a terminal and run:
+nano ~/.ssh/my-bastion-key
+Paste the private key you copied into this file.
+Then:
+chmod 400 ~/.ssh/my-bastion-key
+
+
+
+🟢 Step 6: SSH into Bastion from Your CLI
+Now use the following command:
+ssh -i ~/.ssh/my-bastion-key ec2-user@<Public-IP-of-Bastion>
+Replace <Public-IP-of-Bastion> with your EC2 instance’s public IP (you’ll find this in the EC2 Console).
+
+
+✅ Summary of File Roles
+| File              | Location      | Purpose                    |
+| ----------------- | ------------- | -------------------------- |
+| `mykey`           | Bastion EC2   | Private key (temp)         |
+| `mykey.pub`       | Bastion EC2   | Public key                 |
+| `authorized_keys` | Bastion EC2   | Allows your key to connect |
+| `my-bastion-key`  | Local machine | Used by you to SSH         |
+
+
+
+
+
+===============================================================================================================================================
+
+
+✅ Goal:
+Connect from your bastion EC2 to a private EC2 instance via SSH
+
+
+
+🔧 Pre-Checks Before You Connect
+✅ 1. Instances are in the same VPC
+Bastion (public) and Private EC2 are in same VPC, in different subnets (public and private).
+
+✅ 2. Security Group of Private EC2 allows SSH
+Private EC2’s Security Group must allow:
+
+Port 22 (SSH) from either:
+
+The bastion’s private IP (e.g., 10.0.1.20), or
+
+The bastion’s Security Group (recommended way).
+
+Example Inbound Rule (Private Instance SG):
+| Type | Protocol | Port | Source                     |
+| ---- | -------- | ---- | -------------------------- |
+| SSH  | TCP      | 22   | Bastion's SG (sg-xxxxxxxx) |
+
+
+
+✅ 3. You have an SSH key to access the private instance
+You must either:
+
+Already have a .pem or private key file on the bastion to access the private instance, OR
+
+Add a new public key to the private instance’s ~/.ssh/authorized_keys.
+
+
+🛠️ Option A: If You Already Have Private Instance's Key
+Let’s say you have private-key.pem file already on the bastion.
+
+🟢 Step 1: Make the Key File Secure
+chmod 400 private-key.pem
+🟢 Step 2: SSH into Private Instance
+ssh -i private-key.pem ec2-user@<Private-IP>
+Example:
+ssh -i private-key.pem ec2-user@10.0.2.12
+Use ec2-user for Amazon Linux 2, or ubuntu for Ubuntu AMIs.
+
+Replace with actual private IP of the private instance (from EC2 Console).
+
+
+🛠️ Option B: If You Want to Use a Key You Just Generated on Bastion
+🟢 Step 1: On Bastion, Copy Your Public Key
+cat ~/.ssh/mykey.pub
+🟢 Step 2: Paste That into Private EC2's ~/.ssh/authorized_keys
+If you can access private EC2 via another way (SSM, key, userdata), paste this key into:
+~/.ssh/authorized_keys
+Or use echo:
+echo "ssh-rsa AAAAB3..." >> ~/.ssh/authorized_keys
+Make sure:
+chmod 600 ~/.ssh/authorized_keys
+🟢 Step 3: Connect Using the Key
+ssh -i ~/.ssh/mykey ec2-user@<Private-IP>
+🧱 Troubleshooting?
+If SSH fails:
+
+✅ Check security group of private EC2.
+
+✅ Check network ACLs.
+
+✅ Ensure private EC2 is running.
+
+✅ Check key permissions and username.
+
+
+
+========================================================
+hanks, that's clear.
+✅ You're on the bastion (public) instance,
+❌ You don’t have any access (SSH or EC2 Connect) to the private instance,
+✅ You want to connect from bastion to private EC2.
+
+🧠 Important: You can only SSH into an instance if it has your public key in authorized_keys.
+Since you can’t access the private instance, we have 2 options:🔧 Step-by-Step
+🟢 Step 1: Copy Your Public Key from Bastion
+On the bastion, run:
+cat ~/.ssh/mykey.pub
+Copy the entire output — starts with ssh-rsa AAAA...
+
+
+🟢 Step 2: Go to EC2 Console → Private Instance
+Click your private EC2 instance.
+
+Click Actions → Monitor and troubleshoot → Modify user data
+
+Choose Replace existing user data
+
+Paste the following script:
+#cloud-config
+bootcmd:
+  - [ mkdir, "-p", "/home/ubuntu/.ssh" ]
+  - [ sh, "-c", 'echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQD..." > /home/ubuntu/.ssh/authorized_keys' ]
+  - [ chmod, "700", "/home/ubuntu/.ssh" ]
+  - [ chmod, "600", "/home/ubuntu/.ssh/authorized_keys" ]
+  - [ chown, "-R", "ubuntu:ubuntu", "/home/ubuntu/.ssh" ]
+
+🧠 What is bootcmd in cloud-init?
+bootcmd is a special section in a cloud-init configuration (#cloud-config) that runs commands very early at boot time — before the system’s main services start.
+
+🧾 When to use bootcmd?
+Use it when you want to:
+
+Set up files before login
+
+Pre-create folders
+
+Insert SSH keys early
+
+Configure logs or permissions
+
+Ensure something runs on every reboot
+
+✅ Steps:
+Go to EC2 → Security Groups.
+
+Select the Security Group of your private EC2 (sg-...).
+
+Click Edit Inbound Rules.
+
+Remove any existing SSH rule that uses 0.0.0.0/0.
+
+Now click Add Rule:
+
+Type: SSH
+
+Protocol: TCP
+
+Port Range: 22
+
+Source: Custom → Security Group
+
+Select your bastion’s security group (e.g., sg-0fb8cc5c9bcaaaa3e).
+
+Save the rule ✅
+
+🟢 Step 3: Restart the Private EC2
+Click Instance state → Reboot instance.
+
+After reboot, the instance will allow SSH access using the key you generated on bastion.
+
+🟢 Step 4: From Bastion, SSH into Private EC2
+Back on the bastion:ssh -i ~/.ssh/mykey ec2-user@<PRIVATE-IP>
+
+
