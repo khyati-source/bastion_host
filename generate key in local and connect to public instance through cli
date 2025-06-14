@@ -1,0 +1,45 @@
+🪛 STEP 1: Generate SSH Key on Your Machine
+
+✅ Step-by-Step Fix (Use Windows-style path):
+👉 Step 1: Create the .ssh directory manually
+Run this command in PowerShell:
+New-Item -ItemType Directory -Force -Path $env:USERPROFILE\.ssh
+
+This will create:
+C:\Users\khyat_jerv3vv\.ssh
+
+👉 Step 2: Generate SSH key and save it in the correct folder
+Now run:
+ssh-keygen -t rsa -b 2048 -f $env:USERPROFILE\.ssh\my-local-key
+
+                   or
+In your terminal (Linux/Mac/WSL):
+ssh-keygen -t rsa -b 2048 -f "C:\Users\khyat_jerv3vv\.ssh\my-local-key"
+
+
+
+
+✅ Step 4: Connect to Bastion via EC2 Instance Connect
+Go to the EC2 Console
+
+Select the Public EC2 (Bastion) → Click Connect
+
+Use EC2 Instance Connect
+Once inside, run:
+mkdir -p ~/.ssh
+nano ~/.ssh/authorized_keys
+
+Copy the full public key from local and paste it into nano, save with:
+Set permissions:
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/authorized_keys
+This ensures:
+
+.ssh folder is only accessible to you
+authorized_keys has strict read/write access
+
+
+✅ Step 3: (Optional) Verify Key Access Works
+From your cli , try:
+ssh -i "C:\Users\khyat_jerv3vv\.ssh\my-local-key" ubuntu@<BASTION_PUBLIC_IP>
+
